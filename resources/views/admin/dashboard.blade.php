@@ -25,15 +25,19 @@
             <a class="flex items-center gap-3 p-3 rounded-xl bg-blue-50 text-blue-600 font-semibold" href="#">
                 <i class="fa fa-chart-pie"></i> Dashboard
             </a>
-            <a class="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-100" href="#">
-                <i class="fa fa-calendar-check"></i> Appointment
+           <a href="{{ route('admin.appointments') }}"
+            class="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-100">
+            <i class="fa fa-calendar-check"></i> Appointment
             </a>
+
             <a class="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-100" href="#">
                 <i class="fa fa-credit-card"></i> Payment
             </a>
-            <a class="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-100" href="#">
+            <a class="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-100" href="{{ route('admin.profile') }}">
                 <i class="fa fa-user"></i> Profile
             </a>
+
+
             <a class="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-100" href="#">
                 <i class="fa fa-cog"></i> Settings
             </a>
