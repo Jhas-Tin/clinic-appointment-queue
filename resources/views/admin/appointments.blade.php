@@ -57,16 +57,15 @@
                             </span>
                         </td>
                         <td class="text-center space-x-2">
-                            @if($appointment->status == 'Pending')
-                                <form action="{{ route('admin.appointments.approve', $appointment->id) }}" method="POST" class="inline">
-                                    @csrf
-                                    <button type="submit" class="text-green-600 hover:text-green-800"><i class="fa fa-check"></i></button>
-                                </form>
-                                <form action="{{ route('admin.appointments.cancel', $appointment->id) }}" method="POST" class="inline">
-                                    @csrf
-                                    <button type="submit" class="text-red-500 hover:text-red-700"><i class="fa fa-times"></i></button>
-                                </form>
-                            @endif
+                            <!-- Only Delete -->
+                            <form action="{{ route('admin.appointments.destroy', $appointment->id) }}" method="POST" class="inline" onsubmit="return confirm('Are you sure you want to delete this appointment?');">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="text-red-500 hover:text-red-700">
+                                    <i class="fa fa-trash"></i>
+                                </button>
+                            </form>
+
                             <a href="{{ route('admin.appointments.show', $appointment->id) }}" class="text-blue-600 hover:text-blue-800">
                                 <i class="fa fa-eye"></i>
                             </a>

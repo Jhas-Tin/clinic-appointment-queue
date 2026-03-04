@@ -4,19 +4,19 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\User;
-use App\Models\Admin; // added
+use App\Models\Admin;
+use App\Models\Doctor; // ✅ added
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 
 class AuthController extends Controller
 {
-    // Show Register Page
     public function registerForm()
     {
         return view('auth.register');
     }
 
-    // Handle Registration
+
     public function register(Request $request)
     {
         $request->validate([
@@ -34,13 +34,13 @@ class AuthController extends Controller
         return redirect('/login')->with('success', 'Account created successfully!');
     }
 
-    // Show Login Page (shared for users and admins)
+
     public function loginForm()
     {
         return view('auth.login');
     }
 
-    // Handle Login (shared)
+
     public function login(Request $request)
     {
         $credentials = $request->validate([
@@ -48,16 +48,22 @@ class AuthController extends Controller
             'password' => 'required',
         ]);
 
-        // Try admin first
+        // ✅ ADMIN LOGIN
         if (Auth::guard('admin')->attempt($credentials)) {
             $request->session()->regenerate();
-            return redirect('/admin/dashboard'); // admin dashboard
+            return redirect('/admin/dashboard');
         }
 
-        // Then try user
+        // ✅ DOCTOR LOGIN (added only)
+        if (Auth::guard('doctor')->attempt($credentials)) {
+            $request->session()->regenerate();
+            return redirect('/doctor/dashboard');
+        }
+
+        // ✅ USER LOGIN
         if (Auth::attempt($credentials)) {
             $request->session()->regenerate();
-            return redirect('/dashboard'); // user dashboard
+            return redirect('/dashboard');
         }
 
         return back()->withErrors([
@@ -65,12 +71,21 @@ class AuthController extends Controller
         ]);
     }
 
-    // Handle Logout (shared)
+
     public function logout(Request $request)
     {
+        // admin logout
         if (Auth::guard('admin')->check()) {
             Auth::guard('admin')->logout();
-        } else {
+        }
+
+        // doctor logout
+        elseif (Auth::guard('doctor')->check()) {
+            Auth::guard('doctor')->logout();
+        }
+
+        // user logout
+        else {
             Auth::logout();
         }
 

@@ -4,28 +4,19 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use App\Models\Admin;
 use App\Models\Appointment;
-use Illuminate\Support\Facades\Hash;
+use Carbon\Carbon;
 
 class AdminController extends Controller
 {
-    /**
-     * Show admin login form
-     *
-     * @return \Illuminate\View\View
-     */
+
     public function loginForm()
     {
         return view('admin.login');
     }
 
-    /**
-     * Handle admin login
-     *
-     * @param \Illuminate\Http\Request $request
-     * @return \Illuminate\Http\RedirectResponse
-     */
     public function login(Request $request)
     {
         $credentials = $request->validate([
@@ -43,92 +34,108 @@ class AdminController extends Controller
         ]);
     }
 
-    /**
-     * Show admin dashboard
-     *
-     * @return \Illuminate\View\View
-     */
-    public function dashboard()
-    {
-        // Example chart data
-        $totalPatients = 100;
-        $oldPatients = 40;
-        $newPatients = 60;
+public function dashboard()
+{
+    $now = Carbon::now();
 
-        // Example: Today's appointments
-        $todayAppointments = Appointment::whereDate('appointment_date', now())->get();
+    $todayAppointments = Appointment::whereDate('date', $now->toDateString())
+        ->where('status', '!=', 'Cancelled')
+        ->orderBy('time')
+        ->get()
+        ->map(function ($appointment) use ($now) {
+            $appointment->dynamic_status = $this->getDynamicStatus($appointment);
+            return $appointment;
+        });
 
-        return view('admin.dashboard', compact('totalPatients', 'oldPatients', 'newPatients', 'todayAppointments'));
-    }
+    $nextAppointment = Appointment::where('status', '!=', 'Cancelled')
+        ->whereDate('date', '>=', $now->toDateString())
+        ->orderBy('date')
+        ->orderBy('time')
+        ->get()
+        ->filter(function ($appointment) use ($now) {
+            $startTime = Carbon::parse($appointment->time)->setDateFrom($appointment->date);
+            $endTime = $startTime->copy()->addMinutes(30); 
 
-    /**
-     * Show all appointments
-     *
-     * @return \Illuminate\View\View
-     */
+            return $endTime->greaterThanOrEqualTo($now);
+        })
+        ->map(function ($appointment) use ($now) {
+            $appointment->dynamic_status = $this->getDynamicStatus($appointment);
+            return $appointment;
+        })
+        ->first();
+
+    $appointments = Appointment::latest()->get()
+        ->map(function($appointment) use ($now) {
+            $appointment->dynamic_status = $this->getDynamicStatus($appointment);
+            return $appointment;
+        });
+
+    return view('admin.dashboard', compact('todayAppointments', 'nextAppointment', 'appointments'));
+}
+
     public function appointments()
     {
-        $appointments = Appointment::latest()->get();
+        $appointments = Appointment::latest()->get()
+            ->map(function($appointment) {
+                $appointment->dynamic_status = $this->getDynamicStatus($appointment);
+                return $appointment;
+            });
+
         return view('admin.appointments', compact('appointments'));
     }
 
-    /**
-     * Show single appointment
-     *
-     * @param \App\Models\Appointment $appointment
-     * @return \Illuminate\View\View
-     */
     public function showAppointment(Appointment $appointment)
     {
+        $appointment->dynamic_status = $this->getDynamicStatus($appointment);
         return view('admin.show-appointment', compact('appointment'));
     }
 
-    /**
-     * Approve an appointment
-     *
-     * @param \App\Models\Appointment $appointment
-     * @return \Illuminate\Http\RedirectResponse
-     */
     public function approveAppointment(Appointment $appointment)
     {
-        $appointment->status = 'approved';
-        $appointment->save();
+        $appointment->update([
+            'status' => 'Approved',
+        ]);
 
-        return redirect()->route('admin.appointments')->with('success', 'Appointment approved');
+        return redirect()->route('admin.appointments')
+            ->with('success', 'Appointment approved successfully');
     }
 
-    /**
-     * Cancel an appointment
-     *
-     * @param \App\Models\Appointment $appointment
-     * @return \Illuminate\Http\RedirectResponse
-     */
     public function cancelAppointment(Appointment $appointment)
     {
-        $appointment->status = 'cancelled';
-        $appointment->save();
+        $appointment->update([
+            'status' => 'Cancelled',
+        ]);
 
-        return redirect()->route('admin.appointments')->with('success', 'Appointment cancelled');
+        return redirect()->route('admin.appointments')
+            ->with('success', 'Appointment cancelled successfully');
     }
 
-    /**
-     * Show admin profile page
-     *
-     * @return \Illuminate\View\View
-     */
+    /* ================= HELPER: DYNAMIC STATUS ================= */
+    private function getDynamicStatus(Appointment $appointment)
+    {
+        $now = Carbon::now();
+        $startTime = Carbon::parse($appointment->time)->setDateFrom($appointment->date);
+        $endTime = $startTime->copy()->addMinutes(30); // assuming 30min appointment
+
+        if ($appointment->status == 'Cancelled') {
+            return 'Cancelled';
+        }
+
+        if ($now->between($startTime, $endTime)) {
+            return 'Ongoing';
+        }
+
+        return $appointment->status; // Approved, Pending, etc.
+    }
+
+    /* ================= PROFILE ================= */
+
     public function profile()
     {
-        /** @var Admin $admin */
         $admin = Auth::guard('admin')->user();
         return view('admin.profile', compact('admin'));
     }
 
-    /**
-     * Update admin profile
-     *
-     * @param \Illuminate\Http\Request $request
-     * @return \Illuminate\Http\RedirectResponse
-     */
     public function updateProfile(Request $request)
     {
         /** @var Admin $admin */
@@ -140,29 +147,29 @@ class AdminController extends Controller
             'password' => 'nullable|confirmed|min:6',
         ]);
 
-        $admin->name = $request->name;
-        $admin->email = $request->email;
+        $data = [
+            'name' => $request->name,
+            'email' => $request->email,
+        ];
 
         if ($request->password) {
-            $admin->password = Hash::make($request->password);
+            $data['password'] = Hash::make($request->password);
         }
 
-        $admin->save();
+        $admin->update($data);
 
-        return redirect()->route('admin.profile')->with('success', 'Profile updated successfully');
+        return redirect()->route('admin.profile')
+            ->with('success', 'Profile updated successfully');
     }
 
-    /**
-     * Admin logout
-     *
-     * @param \Illuminate\Http\Request $request
-     * @return \Illuminate\Http\RedirectResponse
-     */
+    /* ================= LOGOUT ================= */
+
     public function logout(Request $request)
     {
         Auth::guard('admin')->logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
+
         return redirect('/admin/login');
     }
 }

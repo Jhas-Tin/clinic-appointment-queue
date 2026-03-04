@@ -12,10 +12,14 @@ class Appointment extends Model
     protected $fillable = [
         'user_id',
         'patient_name',
+        'email',
+        'parent_guardian',
+        'emergency_contact',
         'doctor_name',
         'date',
         'time',
-        'status'
+        'status',
+        'cancel_reason',
     ];
 
     protected $attributes = [
