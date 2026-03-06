@@ -73,28 +73,32 @@
         </div>
 
         <!-- Upcoming Appointments List -->
-        <div class="bg-white rounded-2xl p-6 shadow space-y-4">
-            <h3 class="font-semibold text-gray-800 mb-2">Upcoming Appointments</h3>
-            @forelse($appointments as $appointment)
-                <div class="bg-gray-50 p-4 rounded-xl flex justify-between items-center shadow-sm">
-                    <div>
-                        <p class="font-medium text-gray-800">Dr. {{ $appointment->doctor_name }}</p>
-                        <p class="text-gray-500 text-sm">{{ \Carbon\Carbon::parse($appointment->date)->format('d M, Y') }} - {{ \Carbon\Carbon::parse($appointment->time)->format('h:i A') }}</p>
-                    </div>
-                    <span class="px-3 py-1 text-xs rounded-full
-                        {{ $appointment->status == 'Approved' ? 'bg-blue-100 text-blue-600' : '' }}
-                        {{ $appointment->status == 'Pending' ? 'bg-yellow-100 text-yellow-600' : '' }}
-                        {{ $appointment->status == 'Cancelled' ? 'bg-red-100 text-red-600' : '' }}">
-                        {{ $appointment->status }}
-                    </span>
+<div class="bg-white rounded-2xl p-6 shadow space-y-4">
+    <h3 class="font-semibold text-gray-800 mb-2">Upcoming Appointments</h3>
+
+    <!-- Scrollable container -->
+    <div class="flex-1 overflow-y-auto max-h-96 space-y-4">
+        @forelse($appointments as $appointment)
+            <div class="bg-gray-50 p-4 rounded-xl flex justify-between items-center shadow-sm">
+                <div>
+                    <p class="font-medium text-gray-800">Dr. {{ $appointment->doctor_name }}</p>
+                    <p class="text-gray-500 text-sm">{{ \Carbon\Carbon::parse($appointment->date)->format('d M, Y') }} - {{ \Carbon\Carbon::parse($appointment->time)->format('h:i A') }}</p>
                 </div>
-            @empty
-                <p class="text-center text-gray-500">No upcoming appointments</p>
-            @endforelse
-        </div>
+                <span class="px-3 py-1 text-xs rounded-full
+                    {{ $appointment->status == 'Approved' ? 'bg-blue-100 text-blue-600' : '' }}
+                    {{ $appointment->status == 'Pending' ? 'bg-yellow-100 text-yellow-600' : '' }}
+                    {{ $appointment->status == 'Cancelled' ? 'bg-red-100 text-red-600' : '' }}">
+                    {{ $appointment->status }}
+                </span>
+            </div>
+        @empty
+            <p class="text-center text-gray-500">No upcoming appointments</p>
+        @endforelse
+    </div>
+</div>
     </div>
 
-    <!-- Clinic Queue Status -->
+    {{-- <!-- Clinic Queue Status -->
     <div class="bg-white rounded-2xl p-6 shadow">
         <h3 class="font-semibold text-gray-800 mb-4">Current Clinic Queue</h3>
         @php
@@ -117,7 +121,7 @@
         @else
             <p class="text-center text-gray-500">No patients in the queue</p>
         @endif
-    </div>
+    </div> --}}
 
 </div>
 @endsection

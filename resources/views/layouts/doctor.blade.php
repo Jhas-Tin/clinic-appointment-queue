@@ -14,7 +14,7 @@
 <div class="flex min-h-screen">
 
     <!-- SIDEBAR -->
-    <aside class="w-64 bg-white shadow-lg rounded-r-3xl p-6">
+    <aside class="w-64 bg-white shadow-lg rounded-r-3xl p-6 sticky top-0 h-screen overflow-y-auto flex-shrink-0">
         <div class="text-center">
             <img src="https://img.freepik.com/premium-vector/doctor-profile-with-medical-service-icon_617655-48.jpg" class="w-24 h-24 mx-auto rounded-full shadow">
             <h2 class="mt-4 font-bold text-lg text-blue-600">Doctor</h2>
@@ -24,12 +24,11 @@
         <nav class="mt-10 space-y-3 text-sm">
             <a href="{{ route('doctor.dashboard') }}" 
             class="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-100 {{ request()->is('doctor/dashboard') ? 'bg-blue-50 text-blue-600 font-semibold' : '' }}">
-            <i class="fa fa-calendar-check"></i> Appointments
+                <i class="fa fa-calendar-check"></i> Appointments
             </a>
 
             <a href="{{ route('doctor.availability') }}" 
-            class="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-100
-            {{ request()->is('doctor/availability') ? 'bg-blue-50 text-blue-600 font-semibold' : '' }}">
+            class="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-100 {{ request()->is('doctor/availability') ? 'bg-blue-50 text-blue-600 font-semibold' : '' }}">
                 <i class="fa fa-clock"></i> Availability
             </a>
 
@@ -44,7 +43,7 @@
     </aside>
 
     <!-- MAIN -->
-    <main class="flex-1 p-8">
+    <main class="flex-1 p-8 overflow-y-auto">
         <!-- TOP BAR -->
         <div class="flex justify-between items-center mb-8">
             <h1 class="text-2xl font-bold text-gray-800">@yield('title', 'Doctor Dashboard')</h1>

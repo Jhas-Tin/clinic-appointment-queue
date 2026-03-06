@@ -14,9 +14,9 @@
 <div class="flex min-h-screen">
 
     <!-- SIDEBAR -->
-    <aside class="w-64 bg-white shadow-lg rounded-r-3xl p-6">
+    <aside class="w-64 bg-white shadow-lg rounded-r-3xl p-6 flex-shrink-0 sticky top-0 h-screen overflow-y-auto">
         <div class="text-center">
-            <img src="" class="w-24 h-24 mx-auto rounded-full shadow">
+            <img src="https://img.freepik.com/free-vector/user-circles-set_78370-4704.jpg?semt=ais_hybrid&w=740&q=80" class="w-24 h-24 mx-auto rounded-full shadow">
             <h2 class="mt-4 font-bold text-lg text-blue-600">Admin</h2>
             <p class="text-xs text-gray-500"></p>
         </div>
@@ -29,22 +29,6 @@
                class="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-100 {{ request()->is('admin/appointments') ? 'bg-blue-50 text-blue-600 font-semibold' : '' }}">
                 <i class="fa fa-calendar-check"></i> Appointments
             </a>
-            <!-- <a class="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-100" href="#">
-                <i class="fa fa-credit-card"></i> Payment
-            </a> -->
-            <!-- Profile -->
-            <!-- <a class="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-100 
-            <a class="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-100 {{ request()->is('admin/profile') ? 'bg-blue-50 text-blue-600 font-semibold' : '' }}" 
-            href="{{ route('admin.profile') }}">
-                <i class="fa fa-user"></i> Profile
-            </a> -->
-
-
-
-            <!-- <a class="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-100" href="#">
-                <i class="fa fa-cog"></i> Settings
-            </a> -->
-
             <form method="POST" action="/logout">
                 @csrf
                 <button type="submit"
@@ -56,7 +40,7 @@
     </aside>
 
     <!-- MAIN -->
-    <main class="flex-1 p-8">
+    <main class="flex-1 p-8 overflow-y-auto">
         <!-- TOP BAR -->
         <div class="flex justify-between items-center mb-8">
             <h1 class="text-2xl font-bold text-gray-800">@yield('title', 'Dashboard')</h1>
@@ -73,7 +57,6 @@
 
         <!-- PAGE CONTENT -->
         @yield('content')
-
     </main>
 </div>
 

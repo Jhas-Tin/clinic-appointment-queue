@@ -43,15 +43,17 @@ Route::middleware('auth')->name('user.')->group(function () {
 
 Route::prefix('admin')->name('admin.')->middleware('auth:admin')->group(function () {
 
-    Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
+    // Dashboard route pointing to the new DashboardController
+    Route::get('/dashboard', [App\Http\Controllers\Admin\DashboardController::class, 'index'])->name('dashboard');
 
+    // Appointments routes remain the same
     Route::get('/appointments', [AdminAppointmentController::class, 'index'])->name('appointments');
     Route::post('/appointments/{appointment}/approve', [AdminAppointmentController::class, 'approve'])->name('appointments.approve');
     Route::post('/appointments/{appointment}/cancel', [AdminAppointmentController::class, 'cancel'])->name('appointments.cancel');
     Route::get('/appointments/{appointment}', [AdminAppointmentController::class, 'show'])->name('appointments.show');
-
     Route::delete('/appointments/{appointment}', [AdminAppointmentController::class, 'destroy'])->name('appointments.destroy');
 
+    // Profile routes
     Route::get('/profile', [AdminController::class, 'profile'])->name('profile');
     Route::post('/profile', [AdminController::class, 'updateProfile'])->name('profile.update');
 });
