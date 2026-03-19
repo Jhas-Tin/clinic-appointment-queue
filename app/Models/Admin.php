@@ -10,12 +10,19 @@ class Admin extends Authenticatable
     use Notifiable;
 
     protected $fillable = [
+        'name',
         'email',
         'password',
+        'firebase_uid',
     ];
 
     protected $hidden = [
         'password',
         'remember_token',
+    ];
+
+    protected $casts = [
+        'email_verified_at' => 'datetime',
+        'password' => 'hashed',
     ];
 }

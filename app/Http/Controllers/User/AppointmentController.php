@@ -20,7 +20,8 @@ class AppointmentController extends Controller
             ->latest()
             ->get();
 
-        $doctors = Doctor::all();
+        // Load doctors and their weekly schedules for frontend availability
+        $doctors = Doctor::with('schedules')->get();
 
         return view('user.appointments', compact('appointments', 'doctors'));
     }
@@ -33,7 +34,6 @@ class AppointmentController extends Controller
         $request->validate([
             'patient_name' => 'required',
             'doctor_name' => 'required',
-            'date' => 'required|date',
             'time' => 'required',
             'email' => 'required|email',
             'emergency_contact' => 'nullable',
@@ -42,60 +42,57 @@ class AppointmentController extends Controller
 
         // Fetch doctor by name
         $doctor = Doctor::where('name', $request->doctor_name)->first();
-
         if (!$doctor) {
-            return back()->withErrors([
-                'doctor_name' => 'Selected doctor does not exist.'
-            ]);
+            return back()->withErrors(['doctor_name' => 'Selected doctor does not exist.']);
         }
 
-        // ✅ FIXED: use availability_status
+        // Check doctor general availability
         if ($doctor->availability_status !== 'Available') {
-            return back()->withErrors([
-                'doctor_name' => 'Doctor is currently unavailable.'
-            ]);
+            return back()->withErrors(['doctor_name' => 'Doctor is currently unavailable at this time.']);
         }
 
-        // Check if doctor is available on selected date
-        if (!$doctor->available_date || 
-            $doctor->available_date->format('Y-m-d') !== $request->date) {
+        // Determine today's schedule
+        $today = now()->format('l'); // e.g., Monday, Tuesday
+        $schedule = $doctor->schedules()
+            ->where('day_of_week', $today)
+            ->where('availability_status', 'Available')
+            ->first();
 
-            return back()->withErrors([
-                'date' => 'Doctor is not available on this date.'
-            ]);
+        if (!$schedule) {
+            return back()->withErrors(['doctor_name' => 'Doctor is unavailable today.']);
         }
 
-        // Convert times properly
-        $appointmentTime = Carbon::createFromFormat('H:i', $request->time);
-        $startTime = Carbon::createFromFormat('H:i', substr($doctor->start_time, 0, 5));
-        $endTime = Carbon::createFromFormat('H:i', substr($doctor->end_time, 0, 5));
+        try {
+            // Parse times safely
+            $appointmentTime = Carbon::parse($request->time); // user input time
+            $startTime = isset($schedule->start_time) ? Carbon::parse($schedule->start_time) : null;
+            $endTime = isset($schedule->end_time) ? Carbon::parse($schedule->end_time) : null;
 
-        // Validate time range
-        if ($appointmentTime->lt($startTime) || $appointmentTime->gt($endTime)) {
-            return back()->withErrors([
-                'time' => 'Appointment time is outside doctor\'s available hours.'
-            ]);
-        }
+            // Validate time range
+            if ($startTime && $endTime && ($appointmentTime->lt($startTime) || $appointmentTime->gt($endTime))) {
+                return back()->withErrors([
+                    'time' => 'Appointment time is outside doctor\'s available hours.'
+                ]);
+            }
 
-        // Prevent booking past time (important fix)
-        $selectedDateTime = Carbon::parse($request->date . ' ' . $request->time);
+            // Prevent booking past time
+            $selectedDateTime = now()->setTimeFrom($appointmentTime);
+            if ($selectedDateTime->lt(now())) {
+                return back()->withErrors(['time' => 'You cannot book an appointment in the past.']);
+            }
 
-        if ($selectedDateTime->lt(now())) {
-            return back()->withErrors([
-                'time' => 'You cannot book an appointment in the past.'
-            ]);
+        } catch (\Exception $e) {
+            return back()->withErrors(['time' => 'Invalid time format.']);
         }
 
         // Check duplicate appointment
         $exists = Appointment::where('doctor_name', $request->doctor_name)
-            ->where('date', $request->date)
+            ->where('date', now()->format('Y-m-d')) // appointment is today
             ->where('time', $request->time)
             ->exists();
 
         if ($exists) {
-            return back()->withErrors([
-                'time' => 'This doctor already has an appointment at this time.'
-            ]);
+            return back()->withErrors(['time' => 'This doctor already has an appointment at this time.']);
         }
 
         // Create appointment
@@ -106,7 +103,7 @@ class AppointmentController extends Controller
             'emergency_contact' => $request->emergency_contact,
             'parent_guardian' => $request->parent_guardian,
             'doctor_name' => $request->doctor_name,
-            'date' => $request->date,
+            'date' => now()->format('Y-m-d'), // appointment date is today
             'time' => $request->time,
             'status' => 'Pending',
         ]);

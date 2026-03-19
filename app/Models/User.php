@@ -17,6 +17,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'firebase_uid',
+        'role',
     ];
 
     /**
@@ -34,4 +36,44 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
     ];
+
+    /**
+     * Check if user has a specific role
+     */
+    public function hasRole($role)
+    {
+        return $this->role === $role;
+    }
+
+    /**
+     * Check if user is admin
+     */
+    public function isAdmin()
+    {
+        return $this->role === 'admin';
+    }
+
+    /**
+     * Check if user is doctor
+     */
+    public function isDoctor()
+    {
+        return $this->role === 'doctor';
+    }
+
+    /**
+     * Check if user is receptionist
+     */
+    public function isReceptionist()
+    {
+        return $this->role === 'receptionist';
+    }
+
+    /**
+     * Check if user is patient
+     */
+    public function isPatient()
+    {
+        return $this->role === 'patient';
+    }
 }

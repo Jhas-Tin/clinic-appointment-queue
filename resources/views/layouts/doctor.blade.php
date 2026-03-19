@@ -24,7 +24,7 @@
         <nav class="mt-10 space-y-3 text-sm">
             <a href="{{ route('doctor.dashboard') }}" 
             class="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-100 {{ request()->is('doctor/dashboard') ? 'bg-blue-50 text-blue-600 font-semibold' : '' }}">
-                <i class="fa fa-calendar-check"></i> Appointments
+                <i class="fa fa-calendar-check"></i> Consultations
             </a>
 
             <a href="{{ route('doctor.availability') }}" 

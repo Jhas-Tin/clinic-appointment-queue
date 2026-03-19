@@ -28,7 +28,7 @@ class AppointmentApprovedMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Appointment Approved',
+            subject: 'Doctor Diagnosis and Prescription Details',
         );
     }
 
@@ -39,6 +39,9 @@ class AppointmentApprovedMail extends Mailable
     {
         return new Content(
             view: 'emails.appointment_approved',
+            with: [
+                'appointment' => $this->appointment, // pass full appointment object
+            ],
         );
     }
 

@@ -30,34 +30,47 @@ class DashboardController extends Controller
 
             $appointmentEnd = $appointmentDateTime->copy()->addHour();
 
-            // Detect ongoing appointment
             if ($now->between($appointmentDateTime, $appointmentEnd)) {
                 $appointment->dynamic_status = 'Ongoing';
                 $currentAppointment = $appointment;
             }
-            // Detect next appointment
             elseif ($appointmentDateTime->greaterThan($now) && !$nextAppointment) {
                 $appointment->dynamic_status = 'Upcoming';
                 $nextAppointment = $appointment;
-            } else {
+            } 
+            else {
                 $appointment->dynamic_status = 'Approved';
             }
         }
 
-        // If no ongoing appointment yet (example 7:30 but first is 8:00)
-        if (!$currentAppointment) {
-            $nextAppointment = $todayAppointments->first();
+        // If no ongoing appointment and no next appointment today
+        if (!$currentAppointment && !$nextAppointment) {
+
+            // Get the next appointment from future dates
+            $nextAppointment = Appointment::where('status', 'Approved')
+                ->whereDate('date', '>', $now->toDateString())
+                ->orderBy('date')
+                ->orderBy('time')
+                ->first();
         }
 
-        // --- NEW: get all upcoming appointments after the ongoing ---
-        if ($currentAppointment) {
-            $upcomingAppointments = $todayAppointments->filter(function($appt) use ($currentAppointment) {
-                return Carbon::parse($appt->date . ' ' . $appt->time, 'Asia/Manila')
-                       ->greaterThan(Carbon::parse($currentAppointment->date . ' ' . $currentAppointment->time, 'Asia/Manila'));
-            });
-        } else {
-            $upcomingAppointments = $todayAppointments;
-        }
+        // Upcoming appointments list
+        $upcomingAppointments = Appointment::where('status', 'Approved')
+            ->where(function ($query) use ($now) {
+
+                // Future dates
+                $query->whereDate('date', '>', $now->toDateString())
+
+                // Today but future time
+                ->orWhere(function ($q) use ($now) {
+                    $q->whereDate('date', $now->toDateString())
+                      ->whereTime('time', '>', $now->toTimeString());
+                });
+
+            })
+            ->orderBy('date')
+            ->orderBy('time')
+            ->get();
 
         // Recent appointment requests
         $appointments = Appointment::latest()->get();

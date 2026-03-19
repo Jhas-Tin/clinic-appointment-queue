@@ -25,10 +25,25 @@
             <a class="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-100 {{ request()->is('admin/dashboard') ? 'bg-blue-50 text-blue-600 font-semibold' : '' }}" href="{{ route('admin.dashboard') }}">
                 <i class="fa fa-chart-pie"></i> Dashboard
             </a>
+            
             <a href="{{ route('admin.appointments') }}" 
                class="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-100 {{ request()->is('admin/appointments') ? 'bg-blue-50 text-blue-600 font-semibold' : '' }}">
-                <i class="fa fa-calendar-check"></i> Appointments
+                <i class="fa fa-calendar-check"></i> Consultations
             </a>
+
+            <!-- Inventory link -->
+            <a href="{{ route('admin.inventory.index') }}"
+               class="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-100 {{ request()->is('admin/inventory*') ? 'bg-blue-50 text-blue-600 font-semibold' : '' }}">
+                <i class="fa fa-boxes-stacked"></i> Inventory
+            </a>
+
+           <!-- Doctor Schedule Management Link -->
+            <a href="{{ route('admin.doctor-availability.index') }}"
+            class="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-100 {{ request()->routeIs('admin.doctor-availability*') ? 'bg-blue-50 text-blue-600 font-semibold' : '' }}">
+                <i class="fa fa-calendar-alt"></i> Doctor Schedule
+            </a>
+
+            <!-- Logout form -->
             <form method="POST" action="/logout">
                 @csrf
                 <button type="submit"
