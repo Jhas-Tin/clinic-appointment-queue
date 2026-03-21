@@ -262,16 +262,10 @@
                             <td class="px-6 py-4">
                                 <div class="flex items-center justify-center gap-2">
                                     @if($appointment->status == 'Pending')
-                                        <!-- APPROVE BUTTON -->
+                                        <!-- APPROVE BUTTON (Opens Modal like Cancel) -->
                                         <button type="button" class="approve-btn w-8 h-8 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition flex items-center justify-center"
                                             data-id="{{ $appointment->id }}"
                                             data-patient="{{ $appointment->patient_name }}"
-                                            data-email="{{ $appointment->email }}"
-                                            data-date="{{ $appointment->date }}"
-                                            data-time="{{ $appointment->time }}"
-                                            data-doctor="{{ $appointment->doctor_name }}"
-                                            data-parent="{{ $appointment->parent_guardian }}"
-                                            data-emergency="{{ $appointment->emergency_contact }}"
                                             title="Approve Appointment">
                                             <i class="fa fa-check"></i>
                                         </button>
@@ -282,6 +276,20 @@
                                             data-patient="{{ $appointment->patient_name }}"
                                             title="Cancel Appointment">
                                             <i class="fa fa-times"></i>
+                                        </button>
+                                    @elseif($appointment->status == 'Approved')
+                                        <!-- SEND EMAIL BUTTON -->
+                                        <button type="button" class="send-email-btn w-8 h-8 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition flex items-center justify-center"
+                                            data-id="{{ $appointment->id }}"
+                                            data-patient="{{ $appointment->patient_name }}"
+                                            data-email="{{ $appointment->email }}"
+                                            data-date="{{ $appointment->date }}"
+                                            data-time="{{ $appointment->time }}"
+                                            data-doctor="{{ $appointment->doctor_name }}"
+                                            data-parent="{{ $appointment->parent_guardian }}"
+                                            data-emergency="{{ $appointment->emergency_contact }}"
+                                            title="Send Consultation Email">
+                                            <i class="fa fa-envelope"></i>
                                         </button>
                                     @endif
 
@@ -319,6 +327,144 @@
             </div>
         </div>
         @endif
+    </div>
+</div>
+
+<!-- APPROVE MODAL -->
+<div id="approveModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-xl shadow-xl w-96 p-6 relative animate-fade-in">
+        <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                <i class="fa fa-check-circle text-green-600"></i>
+            </div>
+            <h3 class="text-lg font-bold text-gray-900">Approve Appointment</h3>
+        </div>
+        
+        <p class="text-gray-700 mb-2">Are you sure you want to approve this appointment?</p>
+        <p class="font-semibold text-gray-900 mb-4" id="approvePatientName"></p>
+        
+        <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-3 mb-4">
+            <div class="flex items-start gap-2">
+                <i class="fa fa-info-circle text-yellow-600 mt-0.5"></i>
+                <p class="text-xs text-yellow-800">
+                    Approving this appointment will confirm the schedule. You can send the consultation summary with diagnosis and prescription after the consultation ends.
+                </p>
+            </div>
+        </div>
+        
+        <form id="approveForm" method="POST">
+            @csrf
+            <div class="flex justify-end gap-3">
+                <button type="button" id="closeApproveModal" class="px-4 py-2 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition font-medium">Cancel</button>
+                <button type="submit" class="px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition font-medium shadow-lg shadow-green-200 flex items-center gap-2">
+                    <i class="fa fa-check-circle"></i>
+                    Confirm Approval
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- SEND EMAIL MODAL -->
+<div id="sendEmailModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 relative animate-fade-in max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center gap-3 mb-4 sticky top-0 bg-white pb-2 border-b">
+            <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                <i class="fa fa-envelope text-blue-600"></i>
+            </div>
+            <h3 class="text-lg font-bold text-gray-900">Send Consultation Email</h3>
+        </div>
+        
+        <!-- Patient Details -->
+        <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
+            <h4 class="text-sm font-semibold text-blue-800 mb-2 flex items-center">
+                <i class="fa fa-user mr-1"></i>
+                Patient Information
+            </h4>
+            <div class="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                    <p class="text-xs text-gray-500">Patient</p>
+                    <p class="font-medium text-gray-800" id="emailPatient"></p>
+                </div>
+                <div>
+                    <p class="text-xs text-gray-500">Email</p>
+                    <p class="font-medium text-gray-800" id="emailAddress"></p>
+                </div>
+                <div>
+                    <p class="text-xs text-gray-500">Date</p>
+                    <p class="font-medium text-gray-800" id="emailDate"></p>
+                </div>
+                <div>
+                    <p class="text-xs text-gray-500">Time</p>
+                    <p class="font-medium text-gray-800" id="emailTime"></p>
+                </div>
+                <div>
+                    <p class="text-xs text-gray-500">Doctor</p>
+                    <p class="font-medium text-gray-800" id="emailDoctor"></p>
+                </div>
+                <div>
+                    <p class="text-xs text-gray-500">Parent/Guardian</p>
+                    <p class="font-medium text-gray-800" id="emailParent"></p>
+                </div>
+                <div class="col-span-2">
+                    <p class="text-xs text-gray-500">Emergency Contact</p>
+                    <p class="font-medium text-gray-800" id="emailEmergency"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Email Form -->
+        <form id="sendEmailForm" method="POST" class="space-y-4">
+            @csrf
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fa fa-stethoscope text-blue-500 mr-1"></i>
+                    Diagnosis
+                </label>
+                <textarea name="diagnosis" id="diagnosisInput" class="w-full border-2 border-gray-200 rounded-xl p-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition" placeholder="Enter diagnosis..." required></textarea>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fa fa-capsules text-purple-500 mr-1"></i>
+                    Prescription (Medicine)
+                </label>
+                <select name="medicine_id" id="medicineId" class="w-full border-2 border-gray-200 rounded-xl p-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition">
+                    <option value="">-- Select Medicine --</option>
+                    @foreach(\App\Models\Inventory::all() as $medicine)
+                        <option value="{{ $medicine->id }}" data-stock="{{ $medicine->quantity }}">
+                            {{ $medicine->name }} (Stock: {{ $medicine->quantity }} {{ $medicine->unit ?? 'pcs' }})
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Quantity</label>
+                <input type="number" name="medicine_quantity" id="medicineQuantity" class="w-full border-2 border-gray-200 rounded-xl p-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition" min="1" placeholder="Enter quantity">
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fa fa-heartbeat text-red-500 mr-1"></i>
+                    Patient Status
+                </label>
+                <select name="patient_status" id="patientStatus" class="w-full border-2 border-gray-200 rounded-xl p-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition" required>
+                    <option value="">-- Select Status --</option>
+                    <option value="Go Home">Go Home</option>
+                    <option value="Stay">Stay</option>
+                </select>
+            </div>
+
+            <div class="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                <button type="button" id="closeEmailModal" class="px-4 py-2 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition font-medium">Cancel</button>
+                <button type="submit" class="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition font-medium shadow-lg shadow-blue-200 flex items-center gap-2">
+                    <i class="fa fa-paper-plane"></i>
+                    Send Email
+                </button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -375,114 +521,6 @@
     </div>
 </div>
 
-<!-- APPROVE MODAL -->
-<div id="approveModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
-    <div class="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 relative animate-fade-in max-h-[90vh] overflow-y-auto">
-        <div class="flex items-center gap-3 mb-4 sticky top-0 bg-white pb-2 border-b">
-            <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                <i class="fa fa-check text-green-600"></i>
-            </div>
-            <h3 class="text-lg font-bold text-gray-900">Approve Appointment</h3>
-        </div>
-        
-        <!-- Patient Details -->
-        <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
-            <h4 class="text-sm font-semibold text-blue-800 mb-2 flex items-center">
-                <i class="fa fa-user mr-1"></i>
-                Patient Information
-            </h4>
-            <div class="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                    <p class="text-xs text-gray-500">Patient</p>
-                    <p class="font-medium text-gray-800" id="approvePatient"></p>
-                </div>
-                <div>
-                    <p class="text-xs text-gray-500">Email</p>
-                    <p class="font-medium text-gray-800" id="approveEmail"></p>
-                </div>
-                <div>
-                    <p class="text-xs text-gray-500">Date</p>
-                    <p class="font-medium text-gray-800" id="approveDate"></p>
-                </div>
-                <div>
-                    <p class="text-xs text-gray-500">Time</p>
-                    <p class="font-medium text-gray-800" id="approveTime"></p>
-                </div>
-                <div>
-                    <p class="text-xs text-gray-500">Doctor</p>
-                    <p class="font-medium text-gray-800" id="approveDoctor"></p>
-                </div>
-                <div>
-                    <p class="text-xs text-gray-500">Parent/Guardian</p>
-                    <p class="font-medium text-gray-800" id="approveParent"></p>
-                </div>
-                <div class="col-span-2">
-                    <p class="text-xs text-gray-500">Emergency Contact</p>
-                    <p class="font-medium text-gray-800" id="approveEmergency"></p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Approval Form -->
-        <form id="approveForm" method="POST" class="space-y-4">
-            @csrf
-            
-            <!-- Diagnosis -->
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">
-                    <i class="fa fa-stethoscope text-blue-500 mr-1"></i>
-                    Diagnosis
-                </label>
-                <textarea name="diagnosis" id="diagnosisInput" class="w-full border-2 border-gray-200 rounded-xl p-3 focus:border-green-500 focus:ring-2 focus:ring-green-200 transition" placeholder="Enter diagnosis..." required></textarea>
-            </div>
-            
-            <!-- Medicine Selection -->
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">
-                    <i class="fa fa-capsules text-purple-500 mr-1"></i>
-                    Prescription (Medicine)
-                </label>
-                <select name="medicine_id" id="medicineId" class="w-full border-2 border-gray-200 rounded-xl p-3 focus:border-green-500 focus:ring-2 focus:ring-green-200 transition">
-                    <option value="">-- Select Medicine --</option>
-                    @foreach(\App\Models\Inventory::all() as $medicine)
-                        <option value="{{ $medicine->id }}" data-stock="{{ $medicine->quantity }}">
-                            {{ $medicine->name }} (Stock: {{ $medicine->quantity }} {{ $medicine->unit ?? 'pcs' }})
-                        </option>
-                    @endforeach
-                </select>
-            </div>
-            
-            <!-- Quantity -->
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">Quantity</label>
-                <input type="number" name="medicine_quantity" id="medicineQuantity" class="w-full border-2 border-gray-200 rounded-xl p-3 focus:border-green-500 focus:ring-2 focus:ring-green-200 transition" min="1" placeholder="Enter quantity">
-            </div>
-            
-            <!-- Patient Status -->
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">
-                    <i class="fa fa-heartbeat text-red-500 mr-1"></i>
-                    Patient Status
-                </label>
-                <select name="patient_status" id="patientStatus" class="w-full border-2 border-gray-200 rounded-xl p-3 focus:border-green-500 focus:ring-2 focus:ring-green-200 transition" required>
-                    <option value="">-- Select Status --</option>
-                    <option value="Go Home">Go Home</option>
-                    <option value="Stay">Stay</option>
-                </select>
-            </div>
-
-            <!-- Form Actions -->
-            <div class="flex justify-end gap-3 pt-4 border-t border-gray-100">
-                <button type="button" id="closeApproveModal" class="px-4 py-2 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition font-medium">Cancel</button>
-                <button type="submit" class="px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition font-medium shadow-lg shadow-green-200 flex items-center gap-2">
-                    <i class="fa fa-check-circle"></i>
-                    Approve & Send Email
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
-
 <style>
     @keyframes fadeIn {
         from { opacity: 0; transform: scale(0.95); }
@@ -498,33 +536,53 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
 
-    // ================= APPROVE MODAL =================
+    // APPROVE MODAL
     const approveModal = document.getElementById('approveModal');
     const approveForm = document.getElementById('approveForm');
-    const approvePatient = document.getElementById('approvePatient');
-    const approveEmail = document.getElementById('approveEmail');
-    const approveDate = document.getElementById('approveDate');
-    const approveTime = document.getElementById('approveTime');
-    const approveDoctor = document.getElementById('approveDoctor');
-    const approveParent = document.getElementById('approveParent');
-    const approveEmergency = document.getElementById('approveEmergency');
+    const approvePatientName = document.getElementById('approvePatientName');
     const closeApproveModal = document.getElementById('closeApproveModal');
 
     document.querySelectorAll('.approve-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             const id = this.dataset.id;
-            approvePatient.textContent = this.dataset.patient;
-            approveEmail.textContent = this.dataset.email;
-            approveDate.textContent = new Date(this.dataset.date).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
-            approveTime.textContent = new Date('1970-01-01T' + this.dataset.time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-            approveDoctor.textContent = this.dataset.doctor;
-            approveParent.textContent = this.dataset.parent;
-            approveEmergency.textContent = this.dataset.emergency;
+            approvePatientName.textContent = this.dataset.patient;
             approveForm.action = "{{ url('doctor/appointments') }}/" + id + "/approve";
             approveModal.classList.remove('hidden');
             approveModal.classList.add('flex');
+        });
+    });
 
-            // Reset form fields
+    closeApproveModal.addEventListener('click', function() {
+        approveModal.classList.add('hidden');
+        approveModal.classList.remove('flex');
+    });
+
+    // SEND EMAIL MODAL
+    const sendEmailModal = document.getElementById('sendEmailModal');
+    const sendEmailForm = document.getElementById('sendEmailForm');
+    const emailPatient = document.getElementById('emailPatient');
+    const emailAddress = document.getElementById('emailAddress');
+    const emailDate = document.getElementById('emailDate');
+    const emailTime = document.getElementById('emailTime');
+    const emailDoctor = document.getElementById('emailDoctor');
+    const emailParent = document.getElementById('emailParent');
+    const emailEmergency = document.getElementById('emailEmergency');
+    const closeEmailModal = document.getElementById('closeEmailModal');
+
+    document.querySelectorAll('.send-email-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const id = this.dataset.id;
+            emailPatient.textContent = this.dataset.patient;
+            emailAddress.textContent = this.dataset.email;
+            emailDate.textContent = new Date(this.dataset.date).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+            emailTime.textContent = new Date('1970-01-01T' + this.dataset.time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+            emailDoctor.textContent = this.dataset.doctor;
+            emailParent.textContent = this.dataset.parent || 'N/A';
+            emailEmergency.textContent = this.dataset.emergency || 'N/A';
+            sendEmailForm.action = "{{ url('doctor/appointments') }}/" + id + "/send-email";
+            sendEmailModal.classList.remove('hidden');
+            sendEmailModal.classList.add('flex');
+
             document.getElementById('diagnosisInput').value = '';
             document.getElementById('medicineId').value = '';
             document.getElementById('medicineQuantity').value = '';
@@ -532,12 +590,12 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    closeApproveModal.addEventListener('click', function(){
-        approveModal.classList.add('hidden');
-        approveModal.classList.remove('flex');
+    closeEmailModal.addEventListener('click', function() {
+        sendEmailModal.classList.add('hidden');
+        sendEmailModal.classList.remove('flex');
     });
 
-    // ================= CANCEL MODAL =================
+    // CANCEL MODAL
     const cancelModal = document.getElementById('cancelModal');
     const modalPatient = document.getElementById('modalPatient');
     const reasonInput = document.getElementById('reasonInput');
@@ -559,7 +617,7 @@ document.addEventListener('DOMContentLoaded', function() {
         cancelModal.classList.remove('flex');
     });
 
-    // ================= CANCEL REASON MODAL =================
+    // CANCEL REASON MODAL
     const reasonModal = document.getElementById('reasonModal');
     const reasonText = document.getElementById('reasonText');
     const closeReasonModal = document.getElementById('closeReasonModal');
@@ -588,6 +646,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (e.target === approveModal) {
             approveModal.classList.add('hidden');
             approveModal.classList.remove('flex');
+        }
+        if (e.target === sendEmailModal) {
+            sendEmailModal.classList.add('hidden');
+            sendEmailModal.classList.remove('flex');
         }
         if (e.target === cancelModal) {
             cancelModal.classList.add('hidden');

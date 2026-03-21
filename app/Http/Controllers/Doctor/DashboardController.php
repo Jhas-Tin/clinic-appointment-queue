@@ -55,9 +55,10 @@ class DashboardController extends Controller
     }
 
     /**
-     * Approve appointment, save patient sickness and prescribed medicine, update inventory
+     * Simple approve appointment - just changes status to Approved
+     * No form data needed, just one-click approval
      */
-    public function approve(Request $request, $id)
+    public function approve($id)
     {
         /** @var Doctor|null $doctor */
         $doctor = Auth::guard('doctor')->user();
@@ -66,7 +67,33 @@ class DashboardController extends Controller
             ->where('doctor_name', $doctor->name)
             ->firstOrFail();
 
-        // Validate diagnosis, medicine info, and patient status
+        // Simple approval without any form data
+        $appointment->update([
+            'status' => 'Approved',
+        ]);
+
+        return back()->with('success', 'Appointment approved successfully! You can send the consultation summary after the consultation ends.');
+    }
+
+    /**
+     * Send consultation summary email after the consultation is done
+     * This method saves diagnosis, prescription, and updates inventory
+     */
+    public function sendEmail(Request $request, $id)
+    {
+        /** @var Doctor|null $doctor */
+        $doctor = Auth::guard('doctor')->user();
+
+        $appointment = Appointment::where('id', $id)
+            ->where('doctor_name', $doctor->name)
+            ->firstOrFail();
+
+        // Check if appointment is approved
+        if ($appointment->status !== 'Approved') {
+            return back()->with('error', 'Cannot send email. Appointment must be approved first.');
+        }
+
+        // Validate the form data
         $request->validate([
             'diagnosis' => 'required|string|max:500',
             'medicine_id' => 'nullable|exists:inventories,id',
@@ -74,20 +101,22 @@ class DashboardController extends Controller
             'patient_status' => 'required|in:Go Home,Stay',
         ]);
 
-        // Prepare prescription text
+        // Prepare prescription text and handle inventory deduction
         $prescriptionText = null;
+        $medicineQuantity = null;
 
         if ($request->medicine_id) {
             $medicine = Inventory::find($request->medicine_id);
 
             if ($medicine) {
-                // ONLY store medicine name
+                // Store medicine name as prescription
                 $prescriptionText = $medicine->name;
+                $medicineQuantity = $request->medicine_quantity;
 
                 // Deduct inventory if quantity is provided
                 if ($request->medicine_quantity) {
                     if ($medicine->quantity < $request->medicine_quantity) {
-                        return back()->with('error', 'Not enough stock for the prescribed medicine.');
+                        return back()->with('error', 'Not enough stock for the prescribed medicine. Available stock: ' . $medicine->quantity);
                     }
                     $medicine->quantity -= $request->medicine_quantity;
                     $medicine->save();
@@ -97,27 +126,34 @@ class DashboardController extends Controller
 
         // Update appointment with diagnosis, prescription, and patient status
         $appointment->update([
-            'status' => 'Approved',
             'diagnosis' => $request->diagnosis,
             'prescription' => $prescriptionText,
+            'medicine_quantity' => $medicineQuantity,
             'patient_status' => $request->patient_status,
         ]);
 
-        // Send email to parent
+        // Send email
         if ($appointment->email) {
             try {
                 Mail::to($appointment->email)->send(new AppointmentApprovedMail($appointment));
+                
+                $message = 'Consultation summary email sent successfully to ' . $appointment->email;
+                if ($prescriptionText) {
+                    $message .= ' and ' . $medicineQuantity . ' ' . $prescriptionText . ' deducted from inventory.';
+                }
+                
+                return back()->with('success', $message);
             } catch (\Exception $e) {
-                Log::error('Failed to send approval email: ' . $e->getMessage());
-                return back()->with('success', 'Appointment approved, but email could not be sent.');
+                Log::error('Failed to send email: ' . $e->getMessage());
+                return back()->with('error', 'Failed to send email. Error: ' . $e->getMessage());
             }
         }
 
-        return back()->with('success', 'Appointment approved, patient details saved, inventory updated, and patient status recorded.');
+        return back()->with('error', 'No email address found for this appointment.');
     }
 
     /**
-     * Cancel appointment
+     * Cancel appointment with reason
      */
     public function cancel(Request $request, $id)
     {
@@ -137,6 +173,15 @@ class DashboardController extends Controller
             'cancel_reason' => $request->cancel_reason,
         ]);
 
+        // Optionally send cancellation email
+        if ($appointment->email) {
+            try {
+                Mail::to($appointment->email)->send(new AppointmentCancelledMail($appointment));
+            } catch (\Exception $e) {
+                Log::error('Failed to send cancellation email: ' . $e->getMessage());
+            }
+        }
+
         return back()->with('success', 'Appointment cancelled successfully.');
     }
 
@@ -151,6 +196,15 @@ class DashboardController extends Controller
         $appointment = Appointment::where('id', $id)
             ->where('doctor_name', $doctor->name)
             ->firstOrFail();
+
+        // If appointment had medicine prescribed, restore the stock
+        if ($appointment->prescription && $appointment->medicine_quantity) {
+            $medicine = Inventory::where('name', $appointment->prescription)->first();
+            if ($medicine) {
+                $medicine->quantity += $appointment->medicine_quantity;
+                $medicine->save();
+            }
+        }
 
         $appointment->delete();
 
@@ -196,7 +250,7 @@ class DashboardController extends Controller
     }
 
     /**
-     * NEW METHOD: Update only doctor's online/offline status (like Discord)
+     * Update only doctor's online/offline status (like Discord)
      */
     public function updateStatus(Request $request)
     {

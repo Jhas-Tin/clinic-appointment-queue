@@ -11,6 +11,7 @@ use App\Http\Controllers\Admin\DoctorAvailabilityController as AdminDoctorAvaila
 use App\Http\Controllers\User\DashboardController as UserDashboardController;
 use App\Http\Controllers\User\AppointmentController as UserAppointmentController;
 use App\Http\Controllers\Doctor\DashboardController as DoctorDashboardController;
+use App\Models\Doctor;
 
 /*
 |--------------------------------------------------------------------------
@@ -102,6 +103,7 @@ Route::prefix('doctor')->name('doctor.')->middleware('auth:doctor')->group(funct
 
     // Appointment Actions
     Route::post('/appointments/{id}/approve', [DoctorDashboardController::class, 'approve'])->name('appointments.approve');
+    Route::post('/appointments/{id}/send-email', [DoctorDashboardController::class, 'sendEmail'])->name('appointments.send-email');
     Route::post('/appointments/{id}/cancel', [DoctorDashboardController::class, 'cancel'])->name('appointments.cancel');
     Route::delete('/appointments/{id}', [DoctorDashboardController::class, 'destroy'])->name('appointments.destroy');
 
