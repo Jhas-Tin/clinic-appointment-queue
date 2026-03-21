@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class Appointment extends Model
 {
@@ -41,7 +42,7 @@ class Appointment extends Model
         'email_sent' => 'boolean',
         'email_sent_at' => 'datetime',
         'date' => 'date',
-        'time' => 'datetime',
+        // 'time' => 'datetime', // REMOVED - time should be stored as string
         'facility_id' => 'integer',
     ];
 
@@ -53,6 +54,131 @@ class Appointment extends Model
     public function doctor()
     {
         return $this->belongsTo(Doctor::class, 'doctor_name', 'name');
+    }
+
+    /**
+     * Get clean time (extract only time part if it contains date)
+     */
+    public function getCleanTimeAttribute()
+    {
+        $timeValue = $this->time;
+        
+        if (!$timeValue) {
+            return null;
+        }
+        
+        // If time contains a space, it might be a full datetime string
+        if (str_contains($timeValue, ' ')) {
+            $timeParts = explode(' ', $timeValue);
+            return end($timeParts);
+        }
+        
+        return $timeValue;
+    }
+
+    /**
+     * Get formatted time (12-hour format with AM/PM)
+     */
+    public function getFormattedTimeAttribute()
+    {
+        $cleanTime = $this->clean_time;
+        
+        if (!$cleanTime) {
+            return null;
+        }
+        
+        try {
+            return Carbon::parse($cleanTime)->format('h:i A');
+        } catch (\Exception $e) {
+            return $cleanTime;
+        }
+    }
+
+    /**
+     * Get full datetime for appointment
+     */
+    public function getDateTimeAttribute()
+    {
+        try {
+            $cleanTime = $this->clean_time;
+            if ($cleanTime) {
+                return Carbon::parse($this->date . ' ' . $cleanTime, 'Asia/Manila');
+            }
+            return null;
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Check if appointment is ongoing
+     */
+    public function isOngoing()
+    {
+        $dateTime = $this->date_time;
+        if (!$dateTime) {
+            return false;
+        }
+        
+        $now = Carbon::now('Asia/Manila');
+        $endTime = $dateTime->copy()->addHour();
+        
+        return $now->between($dateTime, $endTime);
+    }
+
+    /**
+     * Check if appointment is upcoming
+     */
+    public function isUpcoming()
+    {
+        $dateTime = $this->date_time;
+        if (!$dateTime) {
+            return false;
+        }
+        
+        $now = Carbon::now('Asia/Manila');
+        
+        return $dateTime->greaterThan($now);
+    }
+
+    /**
+     * Check if appointment is completed
+     */
+    public function isCompleted()
+    {
+        $dateTime = $this->date_time;
+        if (!$dateTime) {
+            return false;
+        }
+        
+        $now = Carbon::now('Asia/Manila');
+        $endTime = $dateTime->copy()->addHour();
+        
+        return $endTime->lessThan($now);
+    }
+
+    /**
+     * Get dynamic status for display
+     */
+    public function getDynamicStatusAttribute()
+    {
+        if ($this->status === 'Cancelled') {
+            return 'Cancelled';
+        }
+        
+        if ($this->isOngoing()) {
+            return 'Ongoing';
+        }
+        
+        if ($this->isUpcoming()) {
+            return 'Upcoming';
+        }
+        
+        if ($this->isCompleted()) {
+            return 'Completed';
+        }
+        
+        return $this->status;
     }
 
     /**
