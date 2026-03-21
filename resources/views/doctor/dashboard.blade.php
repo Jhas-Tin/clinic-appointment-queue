@@ -122,13 +122,33 @@
         <div class="p-6">
             @php
                 $todayAppointments = $appointments->where('date', now()->format('Y-m-d'));
-                $ongoingAppointments = $todayAppointments->where('status', 'Approved')->where('time', '<=', now()->format('H:i:s'));
-                $upcomingAppointments = $todayAppointments->where('status', 'Approved')->where('time', '>', now()->format('H:i:s'));
             @endphp
 
             @if($todayAppointments->count() > 0)
                 <div class="space-y-4">
                     @foreach($todayAppointments as $appointment)
+                        @php
+                            $facilityApprovalStatus = null;
+                            $facilityApprovalText = '';
+                            $facilityApprovalColor = '';
+                            
+                            if ($appointment->facility_name) {
+                                $facility = $facilities[$appointment->facility_id] ?? null;
+                                if ($facility) {
+                                    $facilityApprovalStatus = $facility->approval_status;
+                                    if ($facilityApprovalStatus === 'accept') {
+                                        $facilityApprovalText = '✓ Facility Approved';
+                                        $facilityApprovalColor = 'text-green-600 bg-green-50';
+                                    } elseif ($facilityApprovalStatus === 'pending') {
+                                        $facilityApprovalText = '⏳ Waiting for Facility Approval';
+                                        $facilityApprovalColor = 'text-yellow-600 bg-yellow-50';
+                                    } elseif ($facilityApprovalStatus === 'decline') {
+                                        $facilityApprovalText = '✗ Facility Declined';
+                                        $facilityApprovalColor = 'text-red-600 bg-red-50';
+                                    }
+                                }
+                            }
+                        @endphp
                         <div class="flex items-center justify-between p-4 rounded-xl {{ $appointment->status == 'Approved' && $appointment->time <= now()->format('H:i:s') ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50 border border-gray-200' }}">
                             <div class="flex items-center gap-4">
                                 <div class="w-12 h-12 bg-gradient-to-br from-purple-100 to-purple-200 rounded-full flex items-center justify-center">
@@ -137,6 +157,16 @@
                                 <div>
                                     <p class="font-semibold text-gray-900">{{ $appointment->patient_name }}</p>
                                     <p class="text-xs text-gray-500">#APT-{{ str_pad($appointment->id, 5, '0', STR_PAD_LEFT) }}</p>
+                                    @if($appointment->facility_name)
+                                        <p class="text-xs text-gray-500 mt-1">
+                                            <i class="fa fa-building mr-1"></i> Facility: {{ $appointment->facility_name }}
+                                            @if($facilityApprovalText)
+                                                <span class="ml-2 px-2 py-0.5 rounded-full text-xs {{ $facilityApprovalColor }}">
+                                                    {{ $facilityApprovalText }}
+                                                </span>
+                                            @endif
+                                        </p>
+                                    @endif
                                 </div>
                             </div>
                             <div class="flex items-center gap-6">
@@ -195,6 +225,7 @@
                 <thead class="bg-gradient-to-r from-gray-50 to-gray-100">
                     <tr>
                         <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Patient</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Facility</th>
                         <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date</th>
                         <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Time</th>
                         <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
@@ -204,6 +235,34 @@
                 </thead>
                 <tbody class="divide-y divide-gray-200">
                     @forelse($appointments as $appointment)
+                        @php
+                            $facilityApprovalStatus = null;
+                            $facilityApprovalText = '';
+                            $canApprove = true;
+                            $approvalDisabledReason = '';
+                            
+                            if ($appointment->facility_name) {
+                                $facility = $facilities[$appointment->facility_id] ?? null;
+                                if ($facility) {
+                                    $facilityApprovalStatus = $facility->approval_status;
+                                    if ($facilityApprovalStatus === 'pending') {
+                                        $canApprove = false;
+                                        $approvalDisabledReason = 'Waiting for facility approval';
+                                        $facilityApprovalText = '<span class="text-yellow-600 text-xs">⏳ Waiting Approval</span>';
+                                    } elseif ($facilityApprovalStatus === 'decline') {
+                                        $canApprove = false;
+                                        $approvalDisabledReason = 'Facility was declined';
+                                        $facilityApprovalText = '<span class="text-red-600 text-xs">✗ Declined</span>';
+                                    } elseif ($facilityApprovalStatus === 'accept') {
+                                        $facilityApprovalText = '<span class="text-green-600 text-xs">✓ Approved</span>';
+                                    }
+                                } else {
+                                    $canApprove = false;
+                                    $approvalDisabledReason = 'Facility not found';
+                                    $facilityApprovalText = '<span class="text-red-600 text-xs">✗ Not Found</span>';
+                                }
+                            }
+                        @endphp
                         <tr class="hover:bg-gray-50 transition">
                             <td class="px-6 py-4">
                                 <div class="flex items-center">
@@ -215,6 +274,16 @@
                                         <p class="text-xs text-gray-500">#APT-{{ str_pad($appointment->id, 5, '0', STR_PAD_LEFT) }}</p>
                                     </div>
                                 </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                @if($appointment->facility_name)
+                                    <div class="flex flex-col">
+                                        <span class="text-gray-700">{{ $appointment->facility_name }}</span>
+                                        {!! $facilityApprovalText !!}
+                                    </div>
+                                @else
+                                    <span class="text-gray-400 text-sm">—</span>
+                                @endif
                             </td>
                             <td class="px-6 py-4">
                                 <div class="flex items-center">
@@ -262,13 +331,27 @@
                             <td class="px-6 py-4">
                                 <div class="flex items-center justify-center gap-2">
                                     @if($appointment->status == 'Pending')
-                                        <!-- APPROVE BUTTON (Opens Modal like Cancel) -->
-                                        <button type="button" class="approve-btn w-8 h-8 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition flex items-center justify-center"
-                                            data-id="{{ $appointment->id }}"
-                                            data-patient="{{ $appointment->patient_name }}"
-                                            title="Approve Appointment">
-                                            <i class="fa fa-check"></i>
-                                        </button>
+                                        @if($canApprove)
+                                            <!-- APPROVE BUTTON -->
+                                            <button type="button" class="approve-btn w-8 h-8 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition flex items-center justify-center"
+                                                data-id="{{ $appointment->id }}"
+                                                data-patient="{{ $appointment->patient_name }}"
+                                                title="Approve Appointment">
+                                                <i class="fa fa-check"></i>
+                                            </button>
+                                        @else
+                                            <!-- DISABLED APPROVE BUTTON with Tooltip -->
+                                            <div class="relative group">
+                                                <button type="button" class="w-8 h-8 bg-gray-100 text-gray-400 rounded-lg cursor-not-allowed flex items-center justify-center"
+                                                    disabled
+                                                    title="{{ $approvalDisabledReason }}">
+                                                    <i class="fa fa-check"></i>
+                                                </button>
+                                                <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition pointer-events-none z-10">
+                                                    {{ $approvalDisabledReason }}
+                                                </div>
+                                            </div>
+                                        @endif
 
                                         <!-- CANCEL BUTTON -->
                                         <button type="button" class="cancel-btn w-8 h-8 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition flex items-center justify-center"
@@ -306,7 +389,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="px-6 py-12 text-center">
+                            <td colspan="7" class="px-6 py-12 text-center">
                                 <div class="flex flex-col items-center text-gray-400">
                                     <i class="fa fa-calendar-times text-5xl mb-3"></i>
                                     <p class="text-lg font-medium">No appointments found</p>

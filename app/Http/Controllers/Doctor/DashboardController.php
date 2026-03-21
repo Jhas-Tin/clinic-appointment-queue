@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
 use App\Mail\AppointmentCancelledMail;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
@@ -34,6 +35,14 @@ class DashboardController extends Controller
             ->latest()
             ->get();
 
+        // Get facilities from campus database for approval status checking
+        // Key by ID for direct lookup
+        $facilities = DB::connection('campus')
+            ->table('facilities')
+            ->where('status', 'active')
+            ->get()
+            ->keyBy('id');
+
         $total = Appointment::where('doctor_name', $doctor->name)->count();
         $pending = Appointment::where('doctor_name', $doctor->name)
             ->where('status', 'Pending')
@@ -50,13 +59,13 @@ class DashboardController extends Controller
             'total',
             'pending',
             'approved',
-            'cancelled'
+            'cancelled',
+            'facilities'
         ));
     }
 
     /**
-     * Simple approve appointment - just changes status to Approved
-     * No form data needed, just one-click approval
+     * Approve appointment - checks facility approval status first
      */
     public function approve($id)
     {
@@ -66,6 +75,39 @@ class DashboardController extends Controller
         $appointment = Appointment::where('id', $id)
             ->where('doctor_name', $doctor->name)
             ->firstOrFail();
+
+        // Check if appointment has a facility
+        if ($appointment->facility_id || $appointment->facility_name) {
+            // Try to find facility by ID first (more reliable)
+            $facility = null;
+            
+            if ($appointment->facility_id) {
+                $facility = DB::connection('campus')
+                    ->table('facilities')
+                    ->where('id', $appointment->facility_id)
+                    ->where('status', 'active')
+                    ->first();
+            }
+            
+            // Fallback to name lookup if ID not found
+            if (!$facility && $appointment->facility_name) {
+                $facility = DB::connection('campus')
+                    ->table('facilities')
+                    ->where('name', $appointment->facility_name)
+                    ->where('status', 'active')
+                    ->first();
+            }
+
+            if (!$facility) {
+                return back()->with('error', 'Cannot approve: The facility "' . ($appointment->facility_name ?? 'Unknown') . '" is not available.');
+            }
+
+            // Check if facility is approved
+            if ($facility->approval_status !== 'accept') {
+                $statusMessage = $facility->approval_status === 'pending' ? 'waiting for approval' : 'declined';
+                return back()->with('error', 'Cannot approve: The facility "' . $facility->name . '" is ' . $statusMessage . '. Please wait for facility approval first.');
+            }
+        }
 
         // Simple approval without any form data
         $appointment->update([
@@ -209,6 +251,90 @@ class DashboardController extends Controller
         $appointment->delete();
 
         return back()->with('success', 'Appointment deleted successfully.');
+    }
+
+    /**
+     * Get facility details by ID or name
+     */
+    private function getFacility($appointment)
+    {
+        try {
+            // Try by ID first
+            if ($appointment->facility_id) {
+                $facility = DB::connection('campus')
+                    ->table('facilities')
+                    ->where('id', $appointment->facility_id)
+                    ->first();
+                
+                if ($facility) {
+                    return $facility;
+                }
+            }
+            
+            // Fallback to name lookup
+            if ($appointment->facility_name) {
+                $facility = DB::connection('campus')
+                    ->table('facilities')
+                    ->where('name', $appointment->facility_name)
+                    ->first();
+                
+                return $facility;
+            }
+            
+            return null;
+        } catch (\Exception $e) {
+            Log::error('Failed to fetch facility: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Check if facility is approved
+     */
+    private function isFacilityApproved($appointment)
+    {
+        $facility = $this->getFacility($appointment);
+        
+        if (!$facility) {
+            return false;
+        }
+        
+        return $facility->approval_status === 'accept';
+    }
+
+    /**
+     * Get facility approval status text
+     */
+    public function getFacilityStatus($facilityId = null, $facilityName = null)
+    {
+        try {
+            $query = DB::connection('campus')->table('facilities');
+            
+            if ($facilityId) {
+                $facility = $query->where('id', $facilityId)->first();
+            } elseif ($facilityName) {
+                $facility = $query->where('name', $facilityName)->first();
+            } else {
+                return null;
+            }
+            
+            if (!$facility) {
+                return ['status' => 'not_found', 'text' => 'Not Found', 'class' => 'text-red-600'];
+            }
+            
+            switch ($facility->approval_status) {
+                case 'accept':
+                    return ['status' => 'accept', 'text' => 'Approved', 'class' => 'text-green-600'];
+                case 'pending':
+                    return ['status' => 'pending', 'text' => 'Pending Approval', 'class' => 'text-yellow-600'];
+                case 'decline':
+                    return ['status' => 'decline', 'text' => 'Declined', 'class' => 'text-red-600'];
+                default:
+                    return ['status' => 'unknown', 'text' => 'Unknown', 'class' => 'text-gray-600'];
+            }
+        } catch (\Exception $e) {
+            return ['status' => 'error', 'text' => 'Error', 'class' => 'text-gray-600'];
+        }
     }
 
     /**

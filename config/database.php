@@ -63,7 +63,7 @@ return [
             ]) : [],
         ],
 
-        // NEW CONNECTION FOR CAMPUS FACILITIES DATABASE
+        // CONNECTION FOR CAMPUS FACILITIES DATABASE
         'campus' => [
             'driver' => 'mysql',
             'url' => env('DB_CAMPUS_URL'),

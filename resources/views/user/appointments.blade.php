@@ -9,7 +9,7 @@
     <div class="bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl shadow-lg p-6 text-white">
         <div class="flex items-center justify-between">
             <div>
-                <h2 class="text-2xl font-bold">All  Appointments</h2>
+                <h2 class="text-2xl font-bold">All Appointments</h2>
                 <p class="text-blue-100 mt-1">{{ now()->format('l, F d, Y') }}</p>
             </div>
             <div class="w-16 h-16 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
@@ -141,6 +141,7 @@
                     <tr>
                         <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Patient</th>
                         <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Doctor</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Facility</th>
                         <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date</th>
                         <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Time</th>
                         <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
@@ -166,6 +167,12 @@
                                     <i class="fa fa-user-md text-purple-600 text-xs"></i>
                                 </div>
                                 <span class="text-gray-700">{{ $appointment->doctor_name }}</span>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="flex items-center">
+                                <i class="fa fa-building text-gray-400 mr-2"></i>
+                                <span class="text-gray-700">{{ $appointment->facility_name ?? 'Not specified' }}</span>
                             </div>
                         </td>
                         <td class="px-6 py-4">
@@ -220,7 +227,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="5" class="px-6 py-12 text-center">
+                        <td colspan="6" class="px-6 py-12 text-center">
                             <div class="flex flex-col items-center text-gray-400">
                                 <i class="fa fa-calendar-times text-5xl mb-3"></i>
                                 <p class="text-lg font-medium">No appointments found</p>
@@ -244,7 +251,7 @@
     </div>
 </div>
 
-<!-- CANCEL REASON + REBOOK MODAL - FIXED CENTERING -->
+<!-- CANCEL REASON + REBOOK MODAL -->
 <div id="reasonModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
     <div class="bg-white rounded-xl shadow-xl w-96 p-6 relative animate-fade-in">
         <div class="flex items-center gap-3 mb-4">
@@ -271,7 +278,7 @@
     </div>
 </div>
 
-<!-- BOOKING MODAL - FIXED CENTERING -->
+<!-- BOOKING MODAL WITH FACILITY SELECTION -->
 <div id="appointmentModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative animate-fade-in max-h-[90vh] overflow-y-auto">
         <div class="flex items-center justify-between mb-4 sticky top-0 bg-white pb-2 border-b">
@@ -328,6 +335,54 @@
                 </label>
                 <input type="email" id="emailInput" name="email" placeholder="Enter parent email" 
                        class="w-full border-2 border-gray-200 rounded-xl p-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition" required>
+            </div>
+
+            <!-- Facility Selection with Status Display -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fa fa-building text-indigo-500 mr-1"></i>
+                    Select Facility (Optional)
+                </label>
+                <select id="facilitySelect" name="facility_id" class="w-full border-2 border-gray-200 rounded-xl p-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition">
+                    <option value="">-- No facility needed --</option>
+                    @foreach($facilities as $facility)
+                        @php
+                            $statusBadge = '';
+                            $statusClass = '';
+                            $isAccepted = $facility->approval_status === 'accept';
+                            
+                            if ($facility->approval_status === 'accept') {
+                                $statusBadge = '✓';
+                                $statusClass = 'text-green-600';
+                            } elseif ($facility->approval_status === 'pending') {
+                                $statusBadge = '⏳';
+                                $statusClass = 'text-yellow-600';
+                            } elseif ($facility->approval_status === 'decline') {
+                                $statusBadge = '✗';
+                                $statusClass = 'text-red-600';
+                            }
+                        @endphp
+                        <option value="{{ $facility->id }}" 
+                                data-capacity="{{ $facility->capacity }}"
+                                data-location="{{ $facility->location }}"
+                                data-hours="{{ $facility->available_hours }}"
+                                data-status="{{ $facility->approval_status }}"
+                                data-accepted="{{ $isAccepted ? 'true' : 'false' }}"
+                                class="{{ $statusClass }}">
+                            {{ $facility->name }} 
+                            @if($facility->location) - {{ $facility->location }} @endif
+                            (Capacity: {{ $facility->capacity }}) 
+                            <span class="text-xs {{ $statusClass }}">
+                                {{ $statusBadge }} {{ ucfirst($facility->approval_status) }}
+                            </span>
+                        </option>
+                    @endforeach
+                </select>
+                <div id="facilityInfo" class="mt-2 text-sm text-gray-600 bg-blue-50 p-2 rounded-lg hidden"></div>
+                <div id="facilityWarning" class="mt-2 text-sm text-yellow-600 bg-yellow-50 p-2 rounded-lg hidden">
+                    <i class="fa fa-exclamation-triangle mr-1"></i>
+                    <span id="facilityWarningText"></span>
+                </div>
             </div>
 
             <!-- Doctor Selection -->
@@ -397,6 +452,104 @@
 </style>
 
 <script>
+// Facility selection info with double booking warning for accepted facilities
+const facilitySelect = document.getElementById('facilitySelect');
+const facilityInfo = document.getElementById('facilityInfo');
+const facilityWarning = document.getElementById('facilityWarning');
+const facilityWarningText = document.getElementById('facilityWarningText');
+const timeInput = document.getElementById('timeInput');
+
+function checkFacilityAvailability() {
+    const selected = facilitySelect.selectedOptions[0];
+    const time = timeInput.value;
+    
+    if (!selected || !selected.value || !time) {
+        return;
+    }
+    
+    const facilityId = selected.value;
+    const facilityStatus = selected.dataset.status;
+    const isAccepted = selected.dataset.accepted === 'true';
+    
+    // Only check for accepted facilities
+    if (isAccepted && time) {
+        // AJAX call to check if facility is already booked
+        fetch(`/check-facility-availability?facility_id=${facilityId}&time=${time}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.booked) {
+                    facilityWarning.classList.remove('hidden');
+                    facilityWarningText.innerHTML = `<i class="fa fa-clock mr-1"></i> This facility is already booked for ${time}. Please choose a different time.`;
+                    facilityWarning.classList.add('bg-red-50', 'text-red-600');
+                    facilityWarning.classList.remove('bg-yellow-50', 'text-yellow-600');
+                } else {
+                    facilityWarning.classList.add('hidden');
+                }
+            })
+            .catch(error => {
+                console.error('Error checking facility availability:', error);
+            });
+    } else {
+        facilityWarning.classList.add('hidden');
+    }
+}
+
+if (facilitySelect) {
+    facilitySelect.addEventListener('change', function() {
+        const selected = facilitySelect.selectedOptions[0];
+        
+        if (!selected || !selected.value) {
+            facilityInfo.classList.add('hidden');
+            facilityWarning.classList.add('hidden');
+            return;
+        }
+        
+        const capacity = selected.dataset.capacity;
+        const location = selected.dataset.location;
+        const hours = selected.dataset.hours;
+        const facilityStatus = selected.dataset.status;
+        const isAccepted = selected.dataset.accepted === 'true';
+        
+        let statusText = '';
+        let statusColor = '';
+        
+        if (facilityStatus === 'accept') {
+            statusText = '✓ Approved - This facility can be booked once per time slot';
+            statusColor = 'text-green-600';
+        } else if (facilityStatus === 'pending') {
+            statusText = '⏳ Pending Approval - Multiple bookings allowed';
+            statusColor = 'text-yellow-600';
+        } else if (facilityStatus === 'decline') {
+            statusText = '✗ Declined - Multiple bookings allowed';
+            statusColor = 'text-red-600';
+        }
+        
+        facilityInfo.innerHTML = `
+            <i class="fa fa-info-circle mr-1"></i>
+            <strong>Location:</strong> ${location || 'Not specified'} | 
+            <strong>Capacity:</strong> ${capacity} persons | 
+            <strong>Available Hours:</strong> ${hours || 'N/A'} hours
+            <br><small class="${statusColor}">${statusText}</small>
+        `;
+        facilityInfo.classList.remove('hidden');
+        facilityInfo.classList.add('bg-blue-50', 'text-blue-700');
+        
+        // Check availability if time is already selected
+        if (timeInput && timeInput.value) {
+            checkFacilityAvailability();
+        }
+    });
+}
+
+// Check availability when time changes
+if (timeInput) {
+    timeInput.addEventListener('change', function() {
+        if (facilitySelect && facilitySelect.value) {
+            checkFacilityAvailability();
+        }
+    });
+}
+
 // Show cancellation reason modal
 let selectedBooking = {};
 document.querySelectorAll('.showReasonBtn').forEach(btn => {
@@ -421,118 +574,117 @@ document.querySelectorAll('.showReasonBtn').forEach(btn => {
 });
 
 // Rebook from cancellation modal
-document.getElementById('rebookFromCancel').addEventListener('click', function() {
-    // Close reason modal
-    closeReasonModal();
-    
-    // Open booking modal
-    const modal = document.getElementById('appointmentModal');
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
+const rebookBtn = document.getElementById('rebookFromCancel');
+if (rebookBtn) {
+    rebookBtn.addEventListener('click', function() {
+        closeReasonModal();
+        
+        const modal = document.getElementById('appointmentModal');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
 
-    // Fill booking form with previous details
-    document.getElementById('patientInput').value = selectedBooking.patient;
-    document.getElementById('emailInput').value = selectedBooking.email;
-    document.getElementById('emergencyInput').value = selectedBooking.emergency;
-    document.getElementById('guardianInput').value = selectedBooking.guardian;
+        document.getElementById('patientInput').value = selectedBooking.patient || '';
+        document.getElementById('emailInput').value = selectedBooking.email || '';
+        document.getElementById('emergencyInput').value = selectedBooking.emergency || '';
+        document.getElementById('guardianInput').value = selectedBooking.guardian || '';
 
-    // Preselect doctor
-    const doctorSelect = document.getElementById('doctorSelect');
-    for (let i = 0; i < doctorSelect.options.length; i++) {
-        if (doctorSelect.options[i].value === selectedBooking.doctor) {
-            doctorSelect.options[i].selected = true;
-            doctorSelect.dispatchEvent(new Event('change'));
-            break;
+        const doctorSelect = document.getElementById('doctorSelect');
+        if (doctorSelect) {
+            for (let i = 0; i < doctorSelect.options.length; i++) {
+                if (doctorSelect.options[i].value === selectedBooking.doctor) {
+                    doctorSelect.options[i].selected = true;
+                    doctorSelect.dispatchEvent(new Event('change'));
+                    break;
+                }
+            }
         }
-    }
 
-    // Pre-fill time input
-    document.getElementById('timeInput').value = selectedBooking.time;
-});
+        document.getElementById('timeInput').value = selectedBooking.time || '';
+    });
+}
 
 // Doctor availability
 const doctorSelect = document.getElementById('doctorSelect');
 const doctorAvailability = document.getElementById('doctorAvailability');
 const dateInput = document.getElementById('dateInput');
-const timeInput = document.getElementById('timeInput');
 
-doctorSelect.addEventListener('change', function() {
-    const selected = doctorSelect.selectedOptions[0];
-    
-    if (!selected || !selected.value) {
-        doctorAvailability.classList.add('hidden');
-        timeInput.value = '';
-        timeInput.disabled = true;
-        return;
+if (doctorSelect) {
+    doctorSelect.addEventListener('change', function() {
+        const selected = doctorSelect.selectedOptions[0];
+        
+        if (!selected || !selected.value) {
+            if (doctorAvailability) doctorAvailability.classList.add('hidden');
+            if (timeInput) {
+                timeInput.value = '';
+                timeInput.disabled = true;
+            }
+            return;
+        }
+        
+        const date = selected.dataset.date;
+        let start = selected.dataset.start;
+        let end = selected.dataset.end;
+        const status = selected.dataset.status;
+
+        if (start && start.length > 5) start = start.substring(0,5);
+        if (end && end.length > 5) end = end.substring(0,5);
+
+        if (dateInput) dateInput.value = date;
+
+        if(status !== 'Available') {
+            if (doctorAvailability) {
+                doctorAvailability.textContent = `⚠️ Doctor is unavailable today`;
+                doctorAvailability.classList.remove('hidden', 'bg-blue-50', 'bg-yellow-50');
+                doctorAvailability.classList.add('bg-yellow-50', 'text-yellow-700');
+            }
+            if (timeInput) {
+                timeInput.value = '';
+                timeInput.disabled = true;
+            }
+        } else if(date && start && end) {
+            if (doctorAvailability) {
+                doctorAvailability.textContent = `✓ Available on ${date} from ${start} to ${end}`;
+                doctorAvailability.classList.remove('hidden', 'bg-yellow-50');
+                doctorAvailability.classList.add('bg-blue-50', 'text-blue-700');
+            }
+            if (timeInput) {
+                timeInput.min = start;
+                timeInput.max = end;
+                timeInput.disabled = false;
+            }
+        } else {
+            if (doctorAvailability) doctorAvailability.classList.add('hidden');
+            if (timeInput) {
+                timeInput.value = '';
+                timeInput.removeAttribute('min');
+                timeInput.removeAttribute('max');
+                timeInput.disabled = false;
+            }
+        }
+    });
+
+    if (doctorSelect.value) {
+        doctorSelect.dispatchEvent(new Event('change'));
     }
-    
-    const date = selected.dataset.date;
-    let start = selected.dataset.start;
-    let end = selected.dataset.end;
-    const status = selected.dataset.status;
-
-    if (start && start.length > 5) start = start.substring(0,5);
-    if (end && end.length > 5) end = end.substring(0,5);
-
-    // set hidden date input automatically
-    dateInput.value = date;
-
-    if(status !== 'Available') {
-        doctorAvailability.textContent = `⚠️ Doctor is unavailable today`;
-        doctorAvailability.classList.remove('hidden', 'bg-blue-50', 'bg-yellow-50');
-        doctorAvailability.classList.add('bg-yellow-50', 'text-yellow-700');
-        timeInput.value = '';
-        timeInput.disabled = true;
-    } else if(date && start && end) {
-        doctorAvailability.textContent = `✓ Available on ${date} from ${start} to ${end}`;
-        doctorAvailability.classList.remove('hidden', 'bg-yellow-50');
-        doctorAvailability.classList.add('bg-blue-50', 'text-blue-700');
-        timeInput.min = start;
-        timeInput.max = end;
-        timeInput.disabled = false;
-    } else {
-        doctorAvailability.classList.add('hidden');
-        timeInput.value = '';
-        timeInput.removeAttribute('min');
-        timeInput.removeAttribute('max');
-        timeInput.disabled = false;
-    }
-});
-
-// Trigger change on page load if a doctor is pre-selected
-if (doctorSelect.value) {
-    doctorSelect.dispatchEvent(new Event('change'));
 }
-
-// Simple alert notifications (converted to better UI)
-window.onload = function() {
-    @if ($errors->any())
-        // You can replace this with a toast notification
-        alert("{{ $errors->first() }}");
-    @endif
-
-    @if (session('success'))
-        // You can replace this with a toast notification
-        alert("{{ session('success') }}");
-    @endif
-};
 
 function closeReasonModal(){
     const modal = document.getElementById('reasonModal');
-    modal.classList.add('hidden');
-    modal.classList.remove('flex');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
 }
 
-// Close modals when clicking outside
 window.addEventListener('click', function(e) {
     const appointModal = document.getElementById('appointmentModal');
     const reasonMod = document.getElementById('reasonModal');
     
-    if (e.target === appointModal) {
+    if (e.target === appointModal && appointModal) {
         appointModal.classList.add('hidden');
         appointModal.classList.remove('flex');
     }
-    if (e.target === reasonMod) {
+    if (e.target === reasonMod && reasonMod) {
         reasonMod.classList.add('hidden');
         reasonMod.classList.remove('flex');
     }
