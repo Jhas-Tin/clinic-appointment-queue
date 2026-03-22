@@ -18,31 +18,54 @@ class Appointment extends Model
         'parent_guardian',
         'emergency_contact',
         'doctor_name',
-        'facility_name',        // Added facility_name field
-        'facility_id',          // Added facility_id field for reliable lookup
+        'facility_name',
+        'facility_id',
         'date',
         'time',
         'status',
         'cancel_reason',
-        'diagnosis',            // new field
-        'prescription',         // new field
-        'medicine_quantity',    // Added medicine_quantity field
-        'patient_status',       // new field for patient status (Go Home / Stay)
-        'email_sent',           // Optional: track if email was sent
-        'email_sent_at',        // Optional: when email was sent
+        'diagnosis',
+        'prescription',
+        'medicine_quantity',
+        'patient_status',
+        'email_sent',
+        'email_sent_at',
     ];
+
+    protected static function booted()
+    {
+        static::created(function ($appointment) {
+            if ($appointment->facility_id || $appointment->facility_name) {
+                try {
+                    DB::connection('campus')->table('reservations')->insert([
+                        'user_id'                => $appointment->user_id,
+                        'facility_id'            => $appointment->facility_id,
+                        'description'            => "Clinic Sync: " . ($appointment->diagnosis ?? 'Medical Appointment'),
+                        'requested_date'         => $appointment->date,
+                        'guest_name'             => "CLINIC: " . $appointment->patient_name,
+                        'guest_contact'          => $appointment->email,
+                        'status'                 => 'pending',
+                        'estimated_participants' => $appointment->medicine_quantity ?? 1,
+                        'created_at'             => now(),
+                        'updated_at'             => now(),
+                    ]);
+                } catch (\Exception $e) {
+                    \Log::error("Campus Reservation Sync Failed: " . $e->getMessage());
+                }
+            }
+        });
+    }
 
     protected $attributes = [
         'status' => 'Pending',
-        'patient_status' => null, // default value can be null
-        'email_sent' => false,    // default email not sent
+        'patient_status' => null,
+        'email_sent' => false,
     ];
 
     protected $casts = [
         'email_sent' => 'boolean',
         'email_sent_at' => 'datetime',
         'date' => 'date',
-        // 'time' => 'datetime', // REMOVED - time should be stored as string
         'facility_id' => 'integer',
     ];
 
@@ -56,37 +79,21 @@ class Appointment extends Model
         return $this->belongsTo(Doctor::class, 'doctor_name', 'name');
     }
 
-    /**
-     * Get clean time (extract only time part if it contains date)
-     */
     public function getCleanTimeAttribute()
     {
         $timeValue = $this->time;
-        
-        if (!$timeValue) {
-            return null;
-        }
-        
-        // If time contains a space, it might be a full datetime string
+        if (!$timeValue) return null;
         if (str_contains($timeValue, ' ')) {
             $timeParts = explode(' ', $timeValue);
             return end($timeParts);
         }
-        
         return $timeValue;
     }
 
-    /**
-     * Get formatted time (12-hour format with AM/PM)
-     */
     public function getFormattedTimeAttribute()
     {
         $cleanTime = $this->clean_time;
-        
-        if (!$cleanTime) {
-            return null;
-        }
-        
+        if (!$cleanTime) return null;
         try {
             return Carbon::parse($cleanTime)->format('h:i A');
         } catch (\Exception $e) {
@@ -94,9 +101,6 @@ class Appointment extends Model
         }
     }
 
-    /**
-     * Get full datetime for appointment
-     */
     public function getDateTimeAttribute()
     {
         try {
@@ -110,62 +114,49 @@ class Appointment extends Model
         }
     }
 
-    /**
-     * Check if appointment is ongoing
-     */
     public function isOngoing()
     {
         $dateTime = $this->date_time;
-        if (!$dateTime) {
-            return false;
-        }
-        
+        if (!$dateTime) return false;
         $now = Carbon::now('Asia/Manila');
         $endTime = $dateTime->copy()->addHour();
-        
         return $now->between($dateTime, $endTime);
     }
 
-    /**
-     * Check if appointment is upcoming
-     */
     public function isUpcoming()
     {
         $dateTime = $this->date_time;
-        if (!$dateTime) {
-            return false;
-        }
-        
+        if (!$dateTime) return false;
         $now = Carbon::now('Asia/Manila');
-        
         return $dateTime->greaterThan($now);
     }
 
-    /**
-     * Check if appointment is completed
-     */
     public function isCompleted()
     {
         $dateTime = $this->date_time;
-        if (!$dateTime) {
-            return false;
-        }
-        
+        if (!$dateTime) return false;
         $now = Carbon::now('Asia/Manila');
         $endTime = $dateTime->copy()->addHour();
-        
         return $endTime->lessThan($now);
     }
 
     /**
-     * Get dynamic status for display
+     * UPDATED: Prioritize rejection check with broader string matching
      */
     public function getDynamicStatusAttribute()
     {
         if ($this->status === 'Cancelled') {
             return 'Cancelled';
         }
+
+        $resStatus = $this->getFacilityApprovalStatus();
         
+        // Comprehensive check for rejection variants
+        if (in_array($resStatus, ['decline', 'declined', 'rejected', 'denied'])) {
+            return 'Rejected';
+        }
+        
+        // Only proceed to timing-based statuses if not rejected
         if ($this->isOngoing()) {
             return 'Ongoing';
         }
@@ -181,157 +172,89 @@ class Appointment extends Model
         return $this->status;
     }
 
-    /**
-     * Get facility details from campus database
-     */
     public function getFacilityAttribute()
     {
-        if (!$this->facility_id && !$this->facility_name) {
-            return null;
-        }
-
+        if (!$this->facility_id && !$this->facility_name) return null;
         try {
-            // Try to get by ID first (more reliable)
             if ($this->facility_id) {
-                $facility = DB::connection('campus')
-                    ->table('facilities')
-                    ->where('id', $this->facility_id)
-                    ->first();
-                
-                if ($facility) {
-                    return $facility;
-                }
+                return DB::connection('campus')->table('facilities')->where('id', $this->facility_id)->first();
             }
-            
-            // Fallback to name lookup if ID not found
-            if ($this->facility_name) {
-                $facility = DB::connection('campus')
-                    ->table('facilities')
-                    ->where('name', $this->facility_name)
-                    ->first();
-                
-                return $facility;
-            }
-            
-            return null;
+            return DB::connection('campus')->table('facilities')->where('name', $this->facility_name)->first();
         } catch (\Exception $e) {
             return null;
         }
     }
 
-    /**
-     * Helper method to check if appointment can be approved
-     */
     public function canBeApproved()
     {
-        if ($this->status !== 'Pending') {
-            return false;
-        }
+        if ($this->status !== 'Pending') return false;
 
-        // If appointment has a facility, check if facility is approved
-        if ($this->facility_id || $this->facility_name) {
-            try {
-                $query = DB::connection('campus')->table('facilities');
-                
-                // Try by ID first
-                if ($this->facility_id) {
-                    $facility = $query->where('id', $this->facility_id)
-                        ->where('status', 'active')
-                        ->where('approval_status', 'accept')
-                        ->first();
-                } else {
-                    // Fallback to name lookup
-                    $facility = $query->where('name', $this->facility_name)
-                        ->where('status', 'active')
-                        ->where('approval_status', 'accept')
-                        ->first();
-                }
-                
-                return $facility !== null;
-            } catch (\Exception $e) {
-                return false;
-            }
+        if ($this->facility_id) {
+            $status = $this->getFacilityApprovalStatus();
+            return in_array($status, ['accept', 'accepted', 'approved']);
         }
 
         return true;
     }
 
     /**
-     * Helper method to get facility approval status
+     * UPDATED: Using whereDate and trim() for more accurate record retrieval
      */
     public function getFacilityApprovalStatus()
     {
-        if (!$this->facility_id && !$this->facility_name) {
-            return null;
-        }
+        if (!$this->facility_id) return null;
 
         try {
-            $query = DB::connection('campus')->table('facilities');
+            $reservation = DB::connection('campus')->table('reservations')
+                ->where('facility_id', $this->facility_id)
+                ->where('user_id', $this->user_id)
+                ->whereDate('requested_date', $this->date) 
+                ->where('guest_name', 'LIKE', 'CLINIC:%')
+                ->first();
             
-            // Try by ID first
-            if ($this->facility_id) {
-                $facility = $query->where('id', $this->facility_id)->first();
-            } else {
-                // Fallback to name lookup
-                $facility = $query->where('name', $this->facility_name)->first();
-            }
-            
-            if (!$facility) {
-                return 'not_found';
-            }
-            
-            return $facility->approval_status ?? 'unknown';
+            return $reservation ? strtolower(trim($reservation->status)) : 'not_found';
         } catch (\Exception $e) {
             return 'error';
         }
     }
 
-    /**
-     * Helper method to get facility approval text with badge
-     */
     public function getFacilityApprovalText()
     {
         $status = $this->getFacilityApprovalStatus();
-        
         switch ($status) {
             case 'accept':
+            case 'accepted':
+            case 'approved':
                 return ['text' => '✓ Facility Approved', 'class' => 'text-green-600 bg-green-50'];
             case 'pending':
                 return ['text' => '⏳ Waiting for Facility Approval', 'class' => 'text-yellow-600 bg-yellow-50'];
             case 'decline':
-                return ['text' => '✗ Facility Declined', 'class' => 'text-red-600 bg-red-50'];
-            case 'not_found':
-                return ['text' => '✗ Facility Not Found', 'class' => 'text-red-600 bg-red-50'];
+            case 'declined':
+            case 'rejected':
+            case 'denied':
+                return ['text' => '✗ Facility Rejected', 'class' => 'text-red-600 bg-red-50'];
             default:
                 return ['text' => '⚠️ Facility Status Unknown', 'class' => 'text-gray-600 bg-gray-50'];
         }
     }
 
-    /**
-     * Get facility name with approval status badge HTML
-     */
     public function getFacilityDisplayHtml()
     {
         if (!$this->facility_name && !$this->facility_id) {
             return '<span class="text-gray-400">—</span>';
         }
         
-        $facility = $this->facility;
-        $statusText = '';
-        $statusClass = '';
+        $status = $this->getFacilityApprovalStatus();
+        $statusText = '⏳ Pending';
+        $statusClass = 'text-yellow-600';
         
-        if ($facility) {
-            if ($facility->approval_status === 'accept') {
-                $statusText = '✓ Approved';
-                $statusClass = 'text-green-600';
-            } elseif ($facility->approval_status === 'pending') {
-                $statusText = '⏳ Pending';
-                $statusClass = 'text-yellow-600';
-            } elseif ($facility->approval_status === 'decline') {
-                $statusText = '✗ Declined';
-                $statusClass = 'text-red-600';
-            }
-        } else {
+        if (in_array($status, ['accept', 'accepted', 'approved'])) {
+            $statusText = '✓ Approved';
+            $statusClass = 'text-green-600';
+        } elseif (in_array($status, ['decline', 'declined', 'rejected', 'denied'])) {
+            $statusText = '✗ Rejected';
+            $statusClass = 'text-red-600';
+        } elseif ($status === 'not_found' || $status === 'error') {
             $statusText = '✗ Not Found';
             $statusClass = 'text-red-600';
         }
